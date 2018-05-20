@@ -3,87 +3,106 @@ import numpy as np
 
 class SimpleANN:
 
-    def __init__(self, n_dim, y_dim, learning_rate=1e-4, margin_rate=0.0):
-        '''
-        Creates graph for 3 fully connected layers with softplus activation
-        at hidden layers and sigmoid in output layer.
-        
-        Args:   
-            n_dim: Dimention size of input vector
-            y_dim: Dimention size of output vector
-            learning_rate: The learning rate for the SGD
-            margin_rate: regularization constant for lipschitz margin
+    def __init__(self, n_dim, y_dim, learning_rate=1e-4, margin_rate=0.0, source=None):
         '''
 
+        Creates graph for 3 fully connected layers with softplus activation
+        at hidden layers and sigmoid in output layer.<p>
+        @param n_dim{int} Dimention size of input vector<br>
+        @param y_dim{int} Dimention size of output vector<br>
+        @param learning_rate{float} The learning rate for the SGD<br>
+        @param margin_rate{float} regularization constant for lipschitz margin<br>
+
+        '''
+        # where the will be saved
+        self.saver = None
+        # session to run tf graphs
         self.session = tf.Session()
 
         self._n_dim = n_dim
         self._y_dim = y_dim
-
+        # placeholders for input and labels tensor
         self.x_placehold = tf.placeholder(shape=(None, n_dim), dtype=tf.float32, name="Input")
         self.y_placehold = tf.placeholder(shape=(None, y_dim), dtype=tf.float32, name="Labels")
-
+        # create graphs to model the output
         self.y = self._layers(n_dim, y_dim)
-        
-        self.loss_tensor = self._loss(self.y, self.y_placehold, margin_rate);
+        # create graph for loss calculation
+        self.loss_tensor = self._loss(self.y, self.y_placehold, margin_rate, 0)
+        # create graph for optimizer
         self.update_op = self._optimizer(self.loss_tensor, learning_rate)
-
+        # create graph for hot vector prediction output
+        self.predict = tf.argmax(self.y, axis=1, name="Prediction")
+        # initialize the graph
         self.session.run(tf.global_variables_initializer())
+        # if specified load pre-trained model
+        if source:
+            self.restore(source)
 
 
     def _cross_entropy_loss(self, y, y_gt, clip_min=1e-6):
         '''
+        
         Simple softmax cross entropy loss
+        
         '''
         # clip number near zero to avoid underflow 
         # max can be 1.0 since we are using sigmoid activation
-        _y = tf.clip_by_value(y, clip_min, 1.0)
-        cross_entropy_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_gt, logits=_y, name="cross_entropy_loss")
+        cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_gt, logits=y, name="cross_entropy_loss"))
         return cross_entropy_loss 
+
 
     def _margin_loss(self, y, labels):
         '''
-        Calculates lipschitz margin loss by:
-        loss = n^-1 \sum_i max(y_j - y_i)
-        '''
-        # mean or sum?
-        # TODO: check math
-        margin_loss = tf.reduce_mean(tf.reduce_max(labels - y, axis=1), name="margin_loss")
-        return margin_loss
+        
+        Calculates lipschitz margin loss by:<br>
+        loss = - n^-1 \sum_i max(y_j - y_i)<br>
+        In summation only included entrancies that have correct prediction<br>
 
-    def _regularization_loss(self):
         '''
-        Simple L2 loss calculations
-        '''
-        with tf.name_scope("L2 loss") as scope:
-            l2_loss = tf.reduce_all([p**2 for p in self._params], name="l2")
-        return l2_loss
+        with tf.name_scope("margin") as scope:
+            # exponentially normalize
+            density = tf.nn.softmax(y)
+            # mask out wrong predicti`ons
+            mask = tf.equal(tf.argmax(density, axis=1), tf.argmax(labels, axis=1))
+            _y = tf.boolean_mask(density, mask)
+            # now calculate margin to closest incorrect prediction
+            values, indexes = tf.nn.top_k(_y, 2)
+            # return negative margin: goal to maximize margin equivalent to minimize negative margin
+            margin = -tf.reduce_mean(values[:,0] - values[:,1])
+        return margin
+
 
     def _loss(self, y, y_gt, margin_rate, regularization_rate):
         '''
-        Loss is considered to be :
-        cross entropy + regularization_rate * L2 + margin_rate * lipschitz_margin
+
+        Loss is considered to be:<br>
+        cross entropy + margin_rate * lipschitz_margin
+        
         '''
         with tf.name_scope("Losses") as scope:
-            labels = self._eval(y)
             total_loss = tf.add(self._cross_entropy_loss(y, y_gt), 
-            margin_rate * self._margin_loss(y, labels) +
-            regularization_rate * self._regularization_loss(), name="total_loss")
+            margin_rate * self._margin_loss(y, y_gt), name="total_loss")
         return total_loss
+
 
     def _optimizer(self, loss, learning_rate):
         '''
+
         For optimization was used default adam optimizer
+        
         '''
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss,name="Optimizer")
         return optimizer
 
+
     def _layers(self, n_dim, y_dim):
         '''
+        
         Creates graphs for layers, here is used next simple model:
-              
-         n_di        512             1024           128         y_dim
-        input --> (softplus) -->  (sotfplus) --> (softplus) -> (sigmoid) -> output
+        <br><br>      
+         n_di        512             1024           128         y_dim<br>
+        input --> (softplus) -->  (sotfplus) --> (softplus) -> (sigmoid) -> output<br>
+        
         '''
         # inintialize with random weights
         W1_init = np.random.randn(n_dim, 512) / (n_dim + 512)
@@ -118,9 +137,27 @@ class SimpleANN:
             out = tf.nn.sigmoid(tf.matmul(h3, W4) + b4, name="output_layer")
         return out
 
-    def _eval(self, y):
+
+    def save(self, name):
         '''
-        Evaluate y to hot vector with 1 at argmax(y)
+
+        Saves current model to the file<p>
+        @param name {String} name of the file to store the model<br>
+        @return {Stgring} full path to stored model<br>
+
         '''
-        pass
-    
+        if not self.saver:
+            self.saver = tf.train.Saver()
+        return self.saver.save(self.session, name)
+
+
+    def restore(self, name):
+        '''
+
+        Restore the model from the file to tf graph<p>
+        @param name {String} name of the file with pre-trained model<br>
+
+        '''
+        if not self.saver:
+            self.saver = tf.train.Saver()
+        self.saver.restore(self.session, name)
