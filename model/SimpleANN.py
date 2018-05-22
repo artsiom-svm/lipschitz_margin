@@ -160,4 +160,7 @@ class SimpleANN:
         '''
         if not self.saver:
             self.saver = tf.train.Saver()
-        self.saver.restore(self.session, name)
+        try:
+            self.saver.restore(self.session, name)
+        except:
+            print("Failed to load model")

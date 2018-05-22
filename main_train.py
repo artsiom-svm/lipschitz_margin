@@ -6,7 +6,7 @@ import time
 from tensorflow.contrib.learn.python.learn.datasets.mnist import read_data_sets
 
 
-def train(model, steps, batch_size, safety_factor= 0.005, model_path=None):    
+def train(model, steps, batch_size, safety_factor= 0.02, model_path=None, offset=0):    
     '''
 
     Train the {model} with steps and batch size. Model is trained on MNIST dataset<p>
@@ -15,6 +15,7 @@ def train(model, steps, batch_size, safety_factor= 0.005, model_path=None):
     @param batch_size{int} size of the batch per step<br>
     @param safety_factor{float} frequency to save the model, default 0.005<br>
     @param model_path{String} path to place updated mode, default None<br>
+    @param offset{int} offset from step nuber for history<br>
     @return tuple (accuracy, loss, steps) during the training<br>
 
     '''
@@ -29,7 +30,7 @@ def train(model, steps, batch_size, safety_factor= 0.005, model_path=None):
     # run saver for model
     saver = tf.train.Saver()
     begin = time.time()
-    for step in range(0, steps):
+    for step in range(offset, steps + offset):
         # get next training batch
         batch_x, batch_y = mnist_dataset.train.next_batch(batch_size)
         # train the model
@@ -44,16 +45,49 @@ def train(model, steps, batch_size, safety_factor= 0.005, model_path=None):
             loss.append(l)
             accuracy.append(a)
             t.append(step)
+            print("t = %d, accuracy = %f, loss = %f" % (step, a, l))
             # save model if path provided
             if model_path:
                 model.save(model_path)
+        
     end = time.time()
-    print("Time of training: %.3f", end - begin)
+    print("Time of training: %.3f" % (end - begin))
     # return collected statistics
     return (accuracy, loss, t)
 
 
+def train_marginless(source_path, steps, offset=0):
+    '''
+
+    Trains model with margin = 0.0<br>
+    @return tuple from train function<br>
+    
+    '''
+    with tf.Graph().as_default():
+        model_path = 'trained_models/margin=0/model.ckpt'
+        model = SimpleANN.SimpleANN(784, 10, margin_rate=0.0, source=source_path)
+        result = train(model, steps, 64, model_path=model_path, offset=offset);        
+    return result
+
+def train_margin(source_path, steps, offset=0):
+    '''
+
+    Trains model with margin = 0.0<br>
+    @return tuple from train function<br>
+
+    '''
+    with tf.Graph().as_default():
+        model_path = 'trained_models/margin=1/model.ckpt'
+        model = SimpleANN.SimpleANN(784, 10, margin_rate=1.0, source=source_path)
+        result = train(model, steps, 64, model_path=model_path, offset=offset);        
+    return result
+
+def train_models():
+    steps = 200000
+    d2 = train_margin(None, steps)    
+    d3 = train_marginless(None, steps)
+    return (d2, d3)
+
 if __name__ == '__main__':
-    model_path = 'trained_models/margin=0/model.ckpt'
-    model = SimpleANN.SimpleANN(784, 10, margin_rate=1.0, source=model_path)
-    train(model, 65000, 64, model_path=model_path);
+    train_marginless()
+    train_margin()
