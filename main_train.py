@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from tensorflow.contrib.learn.python.learn.datasets.mnist import read_data_sets
+from tensorflow.examples.tutorials.mnist.input_data import read_data_sets
 
 
 def train(model, steps, batch_size, safety_factor= 0.02, model_path=None, offset=0):    
@@ -20,7 +20,7 @@ def train(model, steps, batch_size, safety_factor= 0.02, model_path=None, offset
 
     '''
     # read data set
-    mnist_dataset = read_data_sets('MNIST_data', one_hot=True)
+    mnist_dataset = read_data_sets("MNIST_data/", one_hot=True)
     # get frequency to store the model
     save = (int)(steps * safety_factor)
     # empty lists for statistics
@@ -35,9 +35,9 @@ def train(model, steps, batch_size, safety_factor= 0.02, model_path=None, offset
         batch_x, batch_y = mnist_dataset.train.next_batch(batch_size)
         # train the model
         model.session.run(model.update_op, feed_dict={model.x_placehold: batch_x, model.y_placehold: batch_y})
-        if step % save == 0:
+        if (step + 1) % save == 0:
             # get fixed test batch
-            batch_x, batch_y = mnist_dataset.train.next_batch(512)
+            batch_x, batch_y = mnist_dataset.test.next_batch(512)
             # get loss and prediction
             l, y = model.session.run([model.loss_tensor, model.predict], feed_dict={model.x_placehold: batch_x, model.y_placehold: batch_y})
             # calculate the accuracy
@@ -45,7 +45,7 @@ def train(model, steps, batch_size, safety_factor= 0.02, model_path=None, offset
             loss.append(l)
             accuracy.append(a)
             t.append(step)
-            print("t = %d, accuracy = %f, loss = %f" % (step, a, l))
+            print("t = %d, accuracy = %f, loss = %f" % (step + 1, a, l))
             # save model if path provided
             if model_path:
                 model.save(model_path)
@@ -83,11 +83,10 @@ def train_margin(source_path, steps, offset=0):
     return result
 
 def train_models():
-    steps = 200000
+    steps = 10000
     d2 = train_margin(None, steps)    
     d3 = train_marginless(None, steps)
     return (d2, d3)
 
 if __name__ == '__main__':
-    train_marginless()
-    train_margin()
+    train_models()

@@ -17,7 +17,7 @@ class SimpleANN:
         # where the will be saved
         self.saver = None
         # session to run tf graphs
-        self.session = tf.Session()
+        self.session = tf.Session(config=tf.ConfigProto(log_device_placement=True))
 
         self._n_dim = n_dim
         self._y_dim = y_dim
@@ -55,7 +55,7 @@ class SimpleANN:
         '''
         
         Calculates lipschitz margin loss by:<br>
-        loss = - n^-1 \sum_i max(y_j - y_i)<br>
+        loss = - n^-1 \sum_i min(y_j - y_i)<br>
         In summation only included entrancies that have correct prediction<br>
 
         '''
@@ -68,7 +68,7 @@ class SimpleANN:
             # now calculate margin to closest incorrect prediction
             values, indexes = tf.nn.top_k(_y, 2)
             # return negative margin: goal to maximize margin equivalent to minimize negative margin
-            margin = -tf.reduce_mean(values[:,0] - values[:,1])
+            margin = -tf.reduce_sum(values[:,0] - values[:,1]) / tf.cast(tf.shape(y)[0], dtype=tf.float32)
         return margin
 
 
@@ -109,9 +109,9 @@ class SimpleANN:
         b1_init = np.random.randn(512) / 512
         W2_init = np.random.randn(512, 1024) / (512 + 1024)
         b2_init = np.random.randn(1024) / 1024
-        W3_init = np.random.randn(1024, 128) / (1024  +128)
-        b3_init = np.random.randn(128) / 128
-        W4_init = np.random.randn(128, y_dim) / (128 + y_dim)
+        W3_init = np.random.randn(1024, 256) / (1024  + 256)
+        b3_init = np.random.randn(256) / 256
+        W4_init = np.random.randn(256, y_dim) / (256 + y_dim)
         b4_init = np.random.randn(y_dim) / y_dim
         
 
@@ -131,10 +131,10 @@ class SimpleANN:
 
         # create graph model
         with tf.name_scope("Model") as scope:
-            h1 = tf.nn.softplus(tf.matmul(self.x_placehold, W1) + b1, name="layer1")
-            h2 = tf.nn.softplus(tf.matmul(h1, W2) + b2, name="layer2")
-            h3 = tf.nn.softplus(tf.matmul(h2, W3) + b3, name="layer3")
-            out = tf.nn.sigmoid(tf.matmul(h3, W4) + b4, name="output_layer")
+            h1 = tf.nn.relu(tf.matmul(self.x_placehold, W1) + b1, name="layer1")
+            h2 = tf.nn.relu(tf.matmul(h1, W2) + b2, name="layer2")
+            h3 = tf.nn.relu(tf.matmul(h2, W3) + b3, name="layer3")
+            out =tf.add(tf.matmul(h3, W4), b4, name="output_layer")
         return out
 
 

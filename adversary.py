@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorflow.contrib.learn.python.learn.datasets.mnist import read_data_sets
-
+from tensorflow.examples.tutorials.mnist.input_data import read_data_sets
 # @author Arsion Balakir
 # This file is designed to perform testing of pre-trained modesl on adversary attack with gaussian noise
 
@@ -17,7 +16,7 @@ def test(model, dataset, batch_size, noise):
     @return {dict} two keys 'accuracy' and 'loss' from the test
 
     '''
-    x, y = dataset.train.next_batch(batch_size)
+    x, y = dataset.test.next_batch(batch_size)
     # add noise
     gaussian_noise = np.random.normal(size=x.shape) * noise
     x = x + gaussian_noise
